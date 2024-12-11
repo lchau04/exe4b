@@ -8,10 +8,13 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Random;
 import java.util.stream.Collectors;
 
 record BankRecords(Collection<Owner> owners, Collection<Account> accounts, Collection<RegisterEntry> registerEntries) { }
@@ -20,20 +23,82 @@ public class Obfuscator {
     private static Logger logger = LogManager.getLogger(Obfuscator.class.getName());
 
     public BankRecords obfuscate(BankRecords rawObjects) {
-        // TODO: Obfuscate and return the records! Fill these in with your own
-        // Example: mask SSN
+        // Obfuscate owners
         List<Owner> newOwners = new ArrayList<>();
         for (Owner o : rawObjects.owners()) {
-            String new_ssn = "***-**-" + o.ssn().substring(7);
-            // other changes...
-            newOwners.add(new Owner(o.name(), o.id(), o.dob(), new_ssn, o.address(), o.address2(), o.city(), o.state(), o.zip()));
+            String newName = o.name().charAt(0) + "."; // Only first letter
+            long newId = (o.id() * 13L) % 1000000007L; 
+
+            Random random = new Random();
+            Date originalDob = o.dob(); 
+            Calendar calendar = Calendar.getInstance();
+            calendar.setTime(originalDob);
+            int randomDays = random.nextInt(730) - 365; // Range: -365 to +365
+            calendar.add(Calendar.DAY_OF_YEAR, randomDays);
+            Date newDob = calendar.getTime();
+
+            String newSsn = "***-**-" + o.ssn().substring(o.ssn().length() - 4); // Last 4 digits
+            String newZip = o.zip().substring(0, 3) + "XX"; // Only first 3 digits with "XX"
+    
+            newOwners.add(new Owner(newName, newId, newDob, newSsn, o.address(), o.address2(), o.city(), o.state(), newZip));
         }
         Collection<Owner> obfuscatedOwners = newOwners;
-        Collection<Account> obfuscatedAccounts = rawObjects.accounts();
-        Collection<RegisterEntry> obfuscatedRegisterEntries = rawObjects.registerEntries();
+    
+        // Obfuscate accounts
+        List<Account> newAccounts = new ArrayList<>();
+        for (Account a : rawObjects.accounts()) {
+            try {
+                String newName = a.getName().charAt(0) + ".";
+                long newId = (a.getId() * 5L) % 1000000007L; 
+                long newOwnerId = (a.getOwnerId() * 8L) % 1000000007L;
+                if (a instanceof CheckingAccount) {
+                    newAccounts.add(new CheckingAccount(newName, newId, a.getBalance(), 0, newOwnerId));
+                } else if (a instanceof SavingsAccount) {
+                    newAccounts.add(new SavingsAccount(newName, newId, a.getBalance(), 0, newOwnerId));
+                } else {
+                    logger.warn("Unknown account type: " + a.getClass().getName());
+                }
+            } catch (Exception e) {
+                logger.error("Error encrypting account number: ", e);
+            }
+        }
+        Collection<Account> obfuscatedAccounts = newAccounts;
+    
+        // Obfuscate register entries
+        List<RegisterEntry> newRegisterEntries = new ArrayList<>();
+        for (RegisterEntry r : rawObjects.registerEntries()) {
+            try {
+                long newId = (r.id() * 21L) % 1000000007L; 
+                long newAccountId = (r.id() * 34L) % 1000000007L; 
+                
+                double newAmount = Math.round(r.amount() * 100 + new Random().nextInt(200) - 100) / 100.0;
 
+                Random random = new Random();
+                Date originalDate = r.date(); 
+                Calendar calendar = Calendar.getInstance();
+                calendar.setTime(originalDate);
+                int randomDays = random.nextInt(730) - 365; // Range: -365 to +365
+                calendar.add(Calendar.DAY_OF_YEAR, randomDays);
+                Date newDate = calendar.getTime();
+
+                newRegisterEntries.add(new RegisterEntry(newId, newAccountId, r.entryName(), newAmount, newDate));
+            } catch (Exception e) {
+                logger.error("Error encrypting transaction ID: ", e);
+            }
+        }
+        Collection<RegisterEntry> obfuscatedRegisterEntries = newRegisterEntries;
+    
+        // Create and return the new BankRecords object
         return new BankRecords(obfuscatedOwners, obfuscatedAccounts, obfuscatedRegisterEntries);
     }
+    
+    // Example encrypt method placeholder
+    private String encrypt(String input) throws Exception {
+        // Implement encryption logic here
+        return "encrypted_" + input; // Example stub
+    }
+    
+    
 
     /**
      * Change the integration test suite to point to our obfuscated production
